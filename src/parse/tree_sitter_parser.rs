@@ -1132,7 +1132,9 @@ pub(crate) fn from_language(language: guess::Language) -> TreeSitterConfig {
                 .unwrap(),
                 sub_languages: vec![
                     TreeSitterSubLanguage {
-                        query: ts::Query::new(language, r#"(call_expression
+                        query: ts::Query::new(
+                            language,
+                            r#"(call_expression
                                                               function: [
                                                                 (await_expression
                                                                   (identifier) @_name
@@ -1144,12 +1146,15 @@ pub(crate) fn from_language(language: guess::Language) -> TreeSitterConfig {
                                                                 (arguments
                                                                   (template_string) @contents)
                                                                 (template_string) @contents
-                                                              ])"#)
-                            .unwrap(),
+                                                              ])"#,
+                        )
+                        .unwrap(),
                         parse_as: Css,
                     },
                     TreeSitterSubLanguage {
-                        query: ts::Query::new(language, r#"(call_expression
+                        query: ts::Query::new(
+                            language,
+                            r#"(call_expression
                                                               function: [
                                                                 (await_expression
                                                                   (identifier) @_name
@@ -1161,8 +1166,9 @@ pub(crate) fn from_language(language: guess::Language) -> TreeSitterConfig {
                                                                 (arguments
                                                                   (template_string) @contents)
                                                                 (template_string) @contents
-                                                              ])"#)
-                            .unwrap(),
+                                                              ])"#,
+                        )
+                        .unwrap(),
                         parse_as: Html,
                     },
                 ],
@@ -1903,6 +1909,8 @@ fn atom_from_cursor<'a>(
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
+
     use strum::IntoEnumIterator as _;
 
     use super::*;
@@ -1953,7 +1961,6 @@ mod tests {
     /// Test that TypeScript with HTML and CSS template literals
     /// (e.g. html`<tag/>` or css`rule{}`) are parsed as such,
     /// instead of being left as single atoms.
-
     #[test]
     fn test_typescript_literals() {
         let arena = Arena::new();
@@ -1962,11 +1969,19 @@ mod tests {
 
         match res[0] {
             Syntax::List { children, .. } => {
-                assert_eq!(children.len(), 3);
+                assert_eq!(children.len(), 2);
 
-                // A list is what we want; it shows that the CSS was parsed
-                // into multiple tokens, so we do not check it further.
-                assert!(matches!(children[1], Syntax::List { .. }));
+                match children[1] {
+                    Syntax::List { children, .. } => {
+                        assert_eq!(children.len(), 3);
+                    }
+                    Syntax::Atom { content, .. } => {
+                        panic!("Expected template string parsed as CSS, got an unparsed atom instead: {:?}", content);
+                    }
+                    _ => {
+                        panic!("Expected a list or an atom, got {:?}", children[1]);
+                    }
+                }
             }
             _ => {
                 panic!("Top level isn't a list");
