@@ -1130,7 +1130,42 @@ pub(crate) fn from_language(language: guess::Language) -> TreeSitterConfig {
                     ),
                 )
                 .unwrap(),
-                sub_languages: vec![],
+                sub_languages: vec![
+                    TreeSitterSubLanguage {
+                        query: ts::Query::new(language, r#"(call_expression
+                                                              function: [
+                                                                (await_expression
+                                                                  (identifier) @_name
+                                                                  (#eq? @_name "css"))
+                                                                ((identifier) @_name
+                                                                  (#eq? @_name "css"))
+                                                              ]
+                                                              arguments: [
+                                                                (arguments
+                                                                  (template_string) @contents)
+                                                                (template_string) @contents
+                                                              ])"#)
+                            .unwrap(),
+                        parse_as: Css,
+                    },
+                    TreeSitterSubLanguage {
+                        query: ts::Query::new(language, r#"(call_expression
+                                                              function: [
+                                                                (await_expression
+                                                                  (identifier) @_name
+                                                                  (#eq? @_name "html"))
+                                                                ((identifier) @_name
+                                                                  (#eq? @_name "html"))
+                                                              ]
+                                                              arguments: [
+                                                                (arguments
+                                                                  (template_string) @contents)
+                                                                (template_string) @contents
+                                                              ])"#)
+                            .unwrap(),
+                        parse_as: Html,
+                    },
+                ],
             }
         }
         Xml => {
@@ -1895,7 +1930,7 @@ mod tests {
     /// Test that HTML with CSS inside it is parsed as such, instead of
     /// being left as a single atom.
     #[test]
-    fn test_subtrees() {
+    fn test_html_subtrees() {
         let arena = Arena::new();
         let config = from_language(guess::Language::Html);
         let res = parse(&arena, "<style>.a { color: red; }</style>", &config, false);
@@ -1903,6 +1938,30 @@ mod tests {
         match res[0] {
             Syntax::List { children, .. } => {
                 // <style>, content, </style>.
+                assert_eq!(children.len(), 3);
+
+                // A list is what we want; it shows that the CSS was parsed
+                // into multiple tokens, so we do not check it further.
+                assert!(matches!(children[1], Syntax::List { .. }));
+            }
+            _ => {
+                panic!("Top level isn't a list");
+            }
+        };
+    }
+
+    /// Test that TypeScript with HTML and CSS template literals
+    /// (e.g. html`<tag/>` or css`rule{}`) are parsed as such,
+    /// instead of being left as single atoms.
+
+    #[test]
+    fn test_typescript_literals() {
+        let arena = Arena::new();
+        let config = from_language(guess::Language::TypeScript);
+        let res = parse(&arena, "css`:host{display: inline-block;}`", &config, false);
+
+        match res[0] {
+            Syntax::List { children, .. } => {
                 assert_eq!(children.len(), 3);
 
                 // A list is what we want; it shows that the CSS was parsed
